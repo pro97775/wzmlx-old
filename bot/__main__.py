@@ -195,7 +195,7 @@ async def restart_notification():
                 msg = BotTheme('RESTART_SUCCESS', time=now.strftime('%I:%M:%S %p'), date=now.strftime('%d/%m/%y'), timz=config_dict['TIMEZONE'], version=get_version()) if cid == chat_id else BotTheme('RESTARTED')
                 msg += "\n\n⌬ <b><i>Incomplete Tasks!</i></b>"
                 for tag, links in data.items():
-                    msg += f"\n➲ <b>User:</b> {tag}\n┖ <b>Tasks:</b>"
+                    msg += f"\n➲ <b>User:</b> {tag}\n<b>Tasks:</b>"
                     for index, link in enumerate(links, start=1):
                         msg_link, source = next(iter(link.items()))
                         msg += f" {index}. <a href='{source}'>S</a> ->  <a href='{msg_link}'>L</a> |"
@@ -240,12 +240,12 @@ async def log_check():
                 LOGGER.info(f"Connected Chat ID : {chat_id}")
             except Exception as e:
                 LOGGER.error(f"Not Connected Chat ID : {chat_id}, ERROR: {e}")
-    
+
 
 async def main():
     await gather(start_cleanup(), torrent_search.initiate_search_tools(), restart_notification(), search_images(), set_commands(bot), log_check())
     await sync_to_async(start_aria2_listener, wait=False)
-    
+
     bot.add_handler(MessageHandler(
         start, filters=command(BotCommands.StartCommand) & private))
     bot.add_handler(CallbackQueryHandler(

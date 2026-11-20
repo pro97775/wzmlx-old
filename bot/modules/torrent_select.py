@@ -129,3 +129,17 @@ async def get_confirm(client, query):
 bot.add_handler(MessageHandler(select, filters=regex(
     f"^/{BotCommands.BtSelectCommand}(_\w+)?") & CustomFilters.authorized & ~CustomFilters.blacklisted))
 bot.add_handler(CallbackQueryHandler(get_confirm, filters=regex("^btsel")))
+
+
+async def select_task(client, query):
+    data = query.data.split()
+    dl = await getDownloadByGid(data[2])
+    if dl is None:
+        await query.answer("This task has been cancelled!", show_alert=True)
+        return
+    await query.answer()
+    msg = "Your download paused. Choose files then press Done Selecting button to start downloading."
+    await sendMessage(query.message, msg, bt_selection_buttons(data[2]))
+
+
+bot.add_handler(CallbackQueryHandler(select_task, filters=regex(r"^sel select")))

@@ -11,9 +11,12 @@ from json import loads as json_loads
 from threading import Thread
 from time import sleep, time
 from subprocess import Popen, run as srun, check_output
-from os import remove as osremove, path as ospath, environ, getcwd
+from os import remove as osremove, replace as osreplace, path as ospath, environ, getcwd
+from pathlib import Path
+import sqlite3
 from aria2p import API as ariaAPI, Client as ariaClient
 from qbittorrentapi import Client as qbClient
+from pyrogram.storage.sqlite_storage import SQLiteStorage
 from faulthandler import enable as faulthandler_enable
 from socket import setdefaulttimeout
 from logging import getLogger, Formatter, FileHandler, StreamHandler, INFO, basicConfig, error as log_error, info as log_info, warning as log_warning
@@ -210,11 +213,54 @@ EXCEP_CHATS = environ.get('EXCEP_CHATS', '')
 if len(EXCEP_CHATS) == 0:
     EXCEP_CHATS = ''
 
+def __session_db_ready(path):
+    if not ospath.isfile(path) or ospath.getsize(path) == 0:
+        return False
+    try:
+        conn = sqlite3.connect(path, timeout=5)
+    except sqlite3.DatabaseError:
+        return False
+    try:
+        return conn.execute('SELECT number FROM version').fetchone() is not None
+    except sqlite3.DatabaseError:
+        return False
+    finally:
+        conn.close()
+
+
+def prepare_session(name):
+    """A session file left half-written (killed start, 0 bytes) makes pyrogram treat it as
+    initialised and fail on its first query, so rebuild it before the client is created."""
+    path = f'{name}.session'
+    if __session_db_ready(path):
+        return
+    if ospath.exists(path):
+        try:
+            osreplace(path, f'{path}.broken')
+            log_warning(f'Session database {path} was unusable, kept as {path}.broken')
+        except OSError as e:
+            log_error(f'Session database {path} is unusable and could not be moved: {e}')
+            return
+    for suffix in ('-journal', '-wal', '-shm'):
+        try:
+            osremove(f'{path}{suffix}')
+        except OSError:
+            pass
+    try:
+        storage = SQLiteStorage(name, Path('.'))
+        bot_loop.run_until_complete(storage.open())
+        bot_loop.run_until_complete(storage.close())
+        log_info(f'Session database {path} recreated')
+    except Exception as e:
+        log_error(f'Could not recreate session database {path}: {e}')
+
+
 IS_PREMIUM_USER = False
 user = ''
 USER_SESSION_STRING = environ.get('USER_SESSION_STRING', '')
 if len(USER_SESSION_STRING) != 0:
     log_info("Creating client from USER_SESSION_STRING")
+    prepare_session('user')
     try:
         user = tgClient('user', TELEGRAM_API, TELEGRAM_HASH, session_string=USER_SESSION_STRING,
                         parse_mode=enums.ParseMode.HTML, no_updates=True, loop=bot_loop)
@@ -832,6 +878,7 @@ else:
     qb_client.app_set_preferences(qb_opt)
 
 log_info("Creating client from BOT_TOKEN")
+prepare_session('bot')
 bot = tgClient('bot', TELEGRAM_API, TELEGRAM_HASH, bot_token=BOT_TOKEN, workers=1000,
                parse_mode=enums.ParseMode.HTML, loop=bot_loop)
 bot_loop = bot.loop

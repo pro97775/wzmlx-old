@@ -4,12 +4,12 @@ from asyncio import sleep
 from aiofiles.os import remove as aioremove
 from random import choice as rchoice
 from time import time
-from re import match as re_match
+from re import match as re_match, sub as re_sub
 from cryptography.fernet import InvalidToken
 
 from pyrogram import Client
 from pyrogram.enums import ParseMode
-from pyrogram.types import InputMediaPhoto
+from pyrogram.types import InputMediaPhoto, InputRichMessage
 from pyrogram.errors import ReplyMarkupInvalid, FloodWait, PeerIdInvalid, ChannelInvalid, RPCError, UserNotParticipant, MessageNotModified, MessageEmpty, PhotoInvalidDimensions, WebpageCurlFailed, MediaEmpty
 
 from bot import config_dict, user_data, categories_dict, bot_cache, LOGGER, bot_name, status_reply_dict, status_reply_dict_lock, Interval, bot, user, download_dict_lock
@@ -18,7 +18,29 @@ from bot.helper.telegram_helper.button_build import ButtonMaker
 from bot.helper.ext_utils.exceptions import TgLinkException
 
 
+def _rich_as_text(rich):
+    if not isinstance(rich, InputRichMessage):
+        return rich
+    # A tg-button group owns its line in the status board ("Fn: <tg-button…>"), so the line
+    # goes with it instead of leaving a dangling "Fn:" label and separators in the fallback.
+    lines = []
+    for line in rich.html.splitlines():
+        if "<tg-button" in line:
+            continue
+        lines.append(re_sub(r"<[^>]+>", "", re_sub(r"<br\s*/?>", "\n", line)))
+    return "\n".join(lines).strip()
+
+
 async def sendMessage(message, text, buttons=None, photo=None, **kwargs):
+    if isinstance(text, InputRichMessage):
+        try:
+            return await message.reply_rich(rich_text=text, reply_markup=buttons, disable_notification=True)
+        except FloodWait as f:
+            await sleep(f.value * 1.2)
+            return await sendMessage(message, text, buttons, photo, **kwargs)
+        except Exception as e:
+            LOGGER.error(f'Rich status message failed, falling back to plain text: {e}')
+            text = _rich_as_text(text)
     try:
         if photo:
             try:
@@ -136,6 +158,15 @@ async def sendMultiMessage(chat_ids, text, buttons=None, photo=None):
 
 
 async def editMessage(message, text, buttons=None, photo=None):
+    if isinstance(text, InputRichMessage):
+        try:
+            return await message.edit(rich_text=text, disable_web_page_preview=True, reply_markup=buttons)
+        except FloodWait as f:
+            await sleep(f.value * 1.2)
+            return await editMessage(message, text, buttons, photo)
+        except Exception as e:
+            LOGGER.error(f'Rich status edit failed, falling back to plain text: {e}')
+            text = _rich_as_text(text)
     try:
         if message.media:
             if photo:
@@ -216,7 +247,7 @@ async def delete_links(message):
         if reply_to := message.reply_to_message:
             await deleteMessage(reply_to)
         await deleteMessage(message)
-        
+
         
 async def delete_all_messages():
     async with status_reply_dict_lock:
@@ -296,12 +327,14 @@ async def update_all_messages(force=False):
         return
     async with status_reply_dict_lock:
         for chat_id in list(status_reply_dict.keys()):
-            if status_reply_dict[chat_id] and msg != status_reply_dict[chat_id][0].text:
+            stored = status_reply_dict[chat_id][0].text
+            current = msg.html if isinstance(msg, InputRichMessage) else msg
+            if status_reply_dict[chat_id] and current != stored:
                 rmsg = await editMessage(status_reply_dict[chat_id][0], msg, buttons, 'IMAGES')
                 if isinstance(rmsg, str) and rmsg.startswith('Telegram says: [400'):
                     del status_reply_dict[chat_id]
                     continue
-                status_reply_dict[chat_id][0].text = msg
+                status_reply_dict[chat_id][0].text = current
                 status_reply_dict[chat_id][1] = time()
 
 
@@ -316,15 +349,17 @@ async def sendStatusMessage(msg):
             message = status_reply_dict[chat_id][0]
             await deleteMessage(message)
             del status_reply_dict[chat_id]
-        if message := await sendMessage(msg, progress, buttons, photo='IMAGES'):
-            if hasattr(message, 'caption'):
-                message.caption = progress
+        rich = isinstance(progress, InputRichMessage)
+        if message := await sendMessage(msg, progress, buttons, photo=None if rich else 'IMAGES'):
+            stored = progress.html if rich else progress
+            if not rich and hasattr(message, 'caption'):
+                message.caption = stored
             else:
-                message.text = progress
+                message.text = stored
         status_reply_dict[chat_id] = [message, time()]
         if not Interval:
             Interval.append(setInterval(config_dict['STATUS_UPDATE_INTERVAL'], update_all_messages))
-    
+
 
 async def open_category_btns(message):
     user_id = message.from_user.id
@@ -355,7 +390,7 @@ async def open_category_btns(message):
         await editMessage(prompt, "<b>Task Cancelled</b>")
     del bot_cache[msg_id]
     return drive_id, index_link, is_cancelled
-    
+
     
 async def open_dump_btns(message):
     user_id = message.from_user.id

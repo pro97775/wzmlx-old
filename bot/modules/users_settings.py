@@ -81,7 +81,7 @@ async def get_user_settings(from_user, key=None, edit_type=None, edit_mode=None)
         buttons.ibutton("Close", f"userset {user_id} close")
 
         text = BotTheme('USER_SETTING', NAME=name, ID=user_id, USERNAME=f'@{from_user.username}', LANG=Language.get(lc).display_name() if (lc := from_user.language_code) else "N/A", DC=from_user.dc_id)
-        
+
         button = buttons.build_menu(1)
     elif key == 'universal':
         ytopt = 'Not Exists' if (val:=user_dict.get('yt_opt', config_dict.get('YT_DLP_OPTIONS', ''))) == '' else val
@@ -152,7 +152,7 @@ async def get_user_settings(from_user, key=None, edit_type=None, edit_mode=None)
 
         thumbmsg = "Exists" if await aiopath.exists(thumbpath) else "Not Exists"
         buttons.ibutton(f"{'✅️' if thumbmsg == 'Exists' else ''} Thumbnail", f"userset {user_id} thumb")
-        
+
         split_size = get_readable_file_size(config_dict['LEECH_SPLIT_SIZE']) + ' (Default)' if user_dict.get('split_size', '') == '' else get_readable_file_size(user_dict['split_size'])
         equal_splits = 'Enabled' if user_dict.get('equal_splits', config_dict.get('EQUAL_SPLITS')) else 'Disabled'
         media_group = 'Enabled' if user_dict.get('media_group', config_dict.get('MEDIA_GROUP')) else 'Disabled'
@@ -358,7 +358,7 @@ async def set_custom(client, message, pre_event, key, direct=False):
         if key == 'usess':
             password = Fernet.generate_key()
             try:
-                await deleteMessage(await (await sendCustomMsg(message.from_user.id, f"<u><b>Decryption Key:</b></u> \n┃\n┃ <code>{password.decode()}</code>\n┃\n┖ <b>Note:</b> <i>Keep this Key Securely, this is not Stored in Bot and Access Key to use your Session...</i>")).pin(both_sides=True))
+                await deleteMessage(await (await sendCustomMsg(message.from_user.id, f"<u><b>Decryption Key:</b></u> \n\n<code>{password.decode()}</code>\n\n<b>Note:</b> <i>Keep this Key Securely, this is not Stored in Bot and Access Key to use your Session...</i>")).pin(both_sides=True))
                 encrypt_sess = Fernet(password).encrypt(value.encode())
                 value = encrypt_sess.decode()
             except Exception:
@@ -433,7 +433,7 @@ async def event_handler(client, query, pfunc, rfunc, photo=False, document=False
             mtype = event.text
         user = event.from_user or event.sender_chat
         return bool(user.id == user_id and event.chat.id == query.message.chat.id and mtype)
-        
+
     handler = client.add_handler(MessageHandler(
         pfunc, filters=create(event_filter)), group=-1)
     while handler_dict[user_id]:
@@ -685,7 +685,7 @@ async def edit_user_settings(client, query):
         await query.answer()
         await deleteMessage(message.reply_to_message)
         await deleteMessage(message)
-        
+
 async def send_users_settings(client, message):
     text = message.text.split(maxsplit=1)
     userid = text[1] if len(text) > 1 else None

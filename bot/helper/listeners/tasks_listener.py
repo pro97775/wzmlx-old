@@ -107,7 +107,7 @@ class MirrorLeechListener:
         mode += ' (Zip)' if self.compress else ' (Unzip)' if self.extract else ''
         mode += f" | #{'qBit' if self.isQbit else 'ytdlp' if self.isYtdlp else 'GDrive' if (self.isClone or self.isGdrive) else 'Aria2' if self.source_url and self.source_url != self.message.link else 'Tg'}"
         self.upload_details['mode'] = mode
-        
+
     def __parseSource(self):
         if self.source_url == self.message.link:
             file = self.message.reply_to_message
@@ -116,7 +116,7 @@ class MirrorLeechListener:
             if file is not None and file.media is not None:
                 mtype = file.media.value
                 media = getattr(file, mtype)
-                self.source_msg = f'┎ <b>Name:</b> <i>{media.file_name if hasattr(media, "file_name") else f"{mtype}_{media.file_unique_id}"}</i>\n┠ <b>Type:</b> {media.mime_type if hasattr(media, "mime_type") else "image/jpeg" if mtype == "photo" else "text/plain"}\n┠ <b>Size:</b> {get_readable_file_size(media.file_size)}\n┠ <b>Created Date:</b> {media.date}\n┖ <b>Media Type:</b> {mtype.capitalize()}'
+                self.source_msg = f'<b>Name:</b> <i>{media.file_name if hasattr(media, "file_name") else f"{mtype}_{media.file_unique_id}"}</i>\n<b>Type:</b> {media.mime_type if hasattr(media, "mime_type") else "image/jpeg" if mtype == "photo" else "text/plain"}\n<b>Size:</b> {get_readable_file_size(media.file_size)}\n<b>Created Date:</b> {media.date}\n<b>Media Type:</b> {mtype.capitalize()}'
             else:
                 self.source_msg = f"<code>{self.message.reply_to_message.text}</code>"
         elif self.source_url.startswith('https://t.me/share/url?url='):
@@ -132,12 +132,12 @@ class MirrorLeechListener:
                     else:
                         name += ('&' if amper else '') + check.replace('dn=', '').replace('+', ' ')
                         amper = True
-                self.source_msg = f"┎ <b>Name:</b> <i>{name}</i>\n┠ <b>Magnet Hash:</b> <code>{hashh}</code>\n┠ <b>Total Trackers:</b> {tracCount} \n┖ <b>Share:</b> <a href='https://t.me/share/url?url={quote(msg)}'>Share To Telegram</a>"
+                self.source_msg = f"<b>Name:</b> <i>{name}</i>\n<b>Magnet Hash:</b> <code>{hashh}</code>\n<b>Total Trackers:</b> {tracCount} \n<b>Share:</b> <a href='https://t.me/share/url?url={quote(msg)}'>Share To Telegram</a>"
             else:
                 self.source_msg = f"<code>{msg}</code>"
         else:
             self.source_msg = f"<code>{self.source_url}</code>"
-        
+
     async def onDownloadStart(self):
         if config_dict['LINKS_LOG_ID'] and not self.excep_chat:
             dispTime = datetime.now(timezone(config_dict['TIMEZONE'])).strftime('%d/%m/%y, %I:%M:%S %p')
@@ -201,7 +201,7 @@ class MirrorLeechListener:
                 non_queued_dl.remove(self.uid)
         await start_from_queued()
         user_dict = user_data.get(self.message.from_user.id, {})
-        
+
         if self.join and await aiopath.isdir(dl_path):
             await join_files(dl_path)
 
@@ -434,7 +434,7 @@ class MirrorLeechListener:
         msg += BotTheme('ELAPSE', Time=get_readable_time(time() - self.message.date.timestamp()))
         msg += BotTheme('MODE', Mode=self.upload_details['mode'])
         LOGGER.info(f'Task Done: {name}')
-        
+
         buttons = ButtonMaker()
         if self.isLeech:
             msg += BotTheme('L_TOTAL_FILES', Files=folders)
@@ -467,7 +467,7 @@ class MirrorLeechListener:
                 for index, (link, name) in enumerate(files.items(), start=1):
                     fmsg += f"{index}. <a href='{link}'>{name}</a>\n"
                     if len(msg.encode() + fmsg.encode()) > (4000 if len(config_dict['IMAGES']) == 0 else 1000):
-                            
+
                         if config_dict['SAFE_MODE']:
                             if self.isSuperGroup:
                                 await sendMessage(self.botpmmsg, msg + BotTheme('L_LL_MSG') + fmsg, btns, photo=self.random_pic)
@@ -539,7 +539,7 @@ class MirrorLeechListener:
             msg += BotTheme('M_CC', Tag=self.tag)
 
             message = msg
-            
+
             btns = ButtonMaker()
             # <Section : MIRROR LOGS>
             if config_dict['MIRROR_LOG_ID'] and not self.excep_chat:
@@ -555,7 +555,7 @@ class MirrorLeechListener:
                     if config_dict['SAVE_MSG']:
                         _btns.ibutton(BotTheme('SAVE_MSG'), 'save', 'footer')
                     await editMessage(self.linkslogmsg, (msg + BotTheme('LINKS_SOURCE', On=dispTime, Source=self.source_msg) + BotTheme('L_LL_MSG') + f"\n\n<a href='{log_msg.link}'>{escape(name)}</a>\n"), _btns.build_menu(1))
-            
+
             # <Section : MESSAGE LOGS>
             if self.isPM and self.isSuperGroup:
                 message += BotTheme('M_BOT_MSG')
@@ -595,10 +595,10 @@ class MirrorLeechListener:
                         non_queued_up.remove(self.uid)
                 await start_from_queued()
                 return
-        
+
         if self.botpmmsg and (not config_dict['DELETE_LINKS'] or config_dict['CLEAN_LOG_MSG']):
             await deleteMessage(self.botpmmsg)
-        
+
         await clean_download(self.dir)
         async with download_dict_lock:
             if self.uid in download_dict.keys():
@@ -626,11 +626,11 @@ class MirrorLeechListener:
                 self.sameDir['tasks'].remove(self.uid)
                 self.sameDir['total'] -= 1
         msg = f'''<i><b>Download Stopped!</b></i>
-┠ <b>Task for:</b> {self.tag}
-┃
-┠ <b>Due To:</b> {escape(error)}
-┠ <b>Mode:</b> {self.upload_details['mode']}
-┖ <b>Elapsed:</b> {get_readable_time(time() - self.message.date.timestamp())}'''
+<b>Task for:</b> {self.tag}
+
+<b>Due To:</b> {escape(error)}
+<b>Mode:</b> {self.upload_details['mode']}
+<b>Elapsed:</b> {get_readable_time(time() - self.message.date.timestamp())}'''
         await sendMessage(self.message, msg, button)
         if count == 0:
             await self.clean()
@@ -664,11 +664,11 @@ class MirrorLeechListener:
                 del download_dict[self.uid]
             count = len(download_dict)
         msg = f'''<i><b>Upload Stopped!</b></i>
-┠ <b>Task for:</b> {self.tag}
-┃
-┠ <b>Due To:</b> {escape(error)}
-┠ <b>Mode:</b> {self.upload_details['mode']}
-┖ <b>Elapsed:</b> {get_readable_time(time() - self.message.date.timestamp())}'''
+<b>Task for:</b> {self.tag}
+
+<b>Due To:</b> {escape(error)}
+<b>Mode:</b> {self.upload_details['mode']}
+<b>Elapsed:</b> {get_readable_time(time() - self.message.date.timestamp())}'''
         await sendMessage(self.message, msg)
         if count == 0:
             await self.clean()

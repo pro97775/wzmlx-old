@@ -21,7 +21,7 @@ from aiohttp import ClientSession as aioClientSession
 from psutil import virtual_memory, cpu_percent, disk_usage
 from requests import get as rget
 from pyrogram.enums import ButtonStyle, ChatType
-from pyrogram.types import BotCommand
+from pyrogram.types import BotCommand, InputRichMessage
 from pyrogram.errors import PeerIdInvalid
 
 from bot.helper.ext_utils.db_handler import DbManger
@@ -292,9 +292,10 @@ def get_readable_message():
         msg += BotTheme('USER',
                         User=download.message.from_user.mention(style="html"))
         msg += BotTheme('ID', Id=download.message.from_user.id)
-        if (download.eng()).startswith("qBit"):
-            msg += BotTheme('BTSEL', Btsel=f"/{BotCommands.BtSelectCommand}_{download.gid()}")
-        msg += BotTheme('CANCEL', Cancel=f"/{BotCommands.CancelMirror}_{download.gid()}")
+        gid = download.gid()
+        msg += f"\n<b>Fn: </b><tg-button type='callback_data' data='cancel canconf {gid}' style='danger'>Cancel</tg-button>"
+        if (download.eng()).startswith(("qBit", "Aria2")):
+            msg += f" | <tg-button type='callback_data' data='sel select {gid}' style='primary'>Select</tg-button>"
 
     if not download_dict:
         return None, None
@@ -353,7 +354,7 @@ def get_readable_message():
     msg += BotTheme('uptime', uptime=get_readable_time(time() - botStartTime))
     msg += BotTheme('DL', DL=get_readable_file_size(dl_speed))
     msg += BotTheme('UL', UL=get_readable_file_size(up_speed))
-    return msg, button
+    return InputRichMessage(html=msg), button
 
 
 async def turn_page(data):

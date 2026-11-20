@@ -96,3 +96,23 @@ bot.add_handler(MessageHandler(cancel_mirror, filters=regex(
 bot.add_handler(MessageHandler(cancell_all_buttons, filters=command(
     BotCommands.CancelAllCommand) & CustomFilters.sudo))
 bot.add_handler(CallbackQueryHandler(cancel_all_update, filters=regex(r"^canall")))
+
+
+@new_task
+async def cancel_task_update(client, query):
+    from bot.helper.ext_utils.bot_utils import getDownloadByGid
+
+    data = query.data.split()
+    dl = await getDownloadByGid(data[2])
+    if dl is None:
+        await query.answer("Task already finished!", show_alert=True)
+        return
+    listener = dl.listener() if hasattr(dl, 'listener') else None
+    if listener and query.from_user.id != listener.message.from_user.id and not await CustomFilters.sudo(client, query):
+        await query.answer("This task is not for you!", show_alert=True)
+        return
+    await query.answer("Cancelling...")
+    await dl.cancel_download()
+
+
+bot.add_handler(CallbackQueryHandler(cancel_task_update, filters=regex(r"^cancel canconf")))
