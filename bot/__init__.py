@@ -5,7 +5,7 @@ from datetime import datetime
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from pyrogram import Client as tgClient, enums
 from pymongo import MongoClient
-from asyncio import Lock, get_event_loop
+from asyncio import Lock, new_event_loop, set_event_loop
 from dotenv import load_dotenv, dotenv_values
 from threading import Thread
 from time import sleep, time
@@ -21,6 +21,8 @@ from uvloop import install
 faulthandler_enable()
 install()
 setdefaulttimeout(600)
+bot_loop = new_event_loop()
+set_event_loop(bot_loop)
 
 botStartTime = time()
 
@@ -214,8 +216,8 @@ if len(USER_SESSION_STRING) != 0:
     log_info("Creating client from USER_SESSION_STRING")
     try:
         user = tgClient('user', TELEGRAM_API, TELEGRAM_HASH, session_string=USER_SESSION_STRING,
-                        parse_mode=enums.ParseMode.HTML, no_updates=True, loop=get_event_loop())
-        get_event_loop().run_until_complete(user.start())
+                        parse_mode=enums.ParseMode.HTML, no_updates=True, loop=bot_loop)
+        bot_loop.run_until_complete(user.start())
         IS_PREMIUM_USER = user.me.is_premium
     except Exception as e:
         log_error(f"Failed making client from USER_SESSION_STRING : {e}")
@@ -807,7 +809,7 @@ else:
 
 log_info("Creating client from BOT_TOKEN")
 bot = tgClient('bot', TELEGRAM_API, TELEGRAM_HASH, bot_token=BOT_TOKEN, workers=1000,
-               parse_mode=enums.ParseMode.HTML, loop=get_event_loop())
+               parse_mode=enums.ParseMode.HTML, loop=bot_loop)
 bot_loop = bot.loop
 bot_loop.run_until_complete(bot.start())
 bot_name = bot.me.username
