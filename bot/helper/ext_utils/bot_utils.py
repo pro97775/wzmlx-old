@@ -40,6 +40,8 @@ SIZE_UNITS   = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB']
 STATUS_START = 0
 PAGES        = 1
 PAGE_NO      = 1
+STATUS_FILTER = 'All'
+PAGE_STEP    = 1
 
 
 class MirrorStatus:
@@ -55,6 +57,27 @@ class MirrorStatus:
     STATUS_CHECKING    = "CheckUp"
     STATUS_SEEDING     = "Seed"
     STATUS_PROCESSING  = "Process"
+
+
+STATUS_FILTERS = {
+    'All': 'All',
+    'DL': MirrorStatus.STATUS_DOWNLOADING,
+    'UP': MirrorStatus.STATUS_UPLOADING,
+    'Seed': MirrorStatus.STATUS_SEEDING,
+    'Queue': 'Queue',
+    'Other': 'Other',
+}
+
+STATUS_FILTER_ICONS = {
+    'All': '🔘',
+    'DL': '🔵',
+    'UP': '🟢',
+    'Seed': '🟣',
+    'Queue': '🟡',
+    'Other': '🟠',
+}
+
+STATUS_STEP_ICONS = {1: '1️⃣', 2: '2️⃣', 4: '4️⃣', 8: '8️⃣'}
 
 
 class setInterval:
@@ -206,24 +229,44 @@ class EngineStatus:
         self.STATUS_FFMPEG = f"ffmpeg v{version_cache['ffmpeg']}"
 
 
+def _status_matches(download):
+    if STATUS_FILTER == 'All':
+        return True
+    try:
+        tstatus = download.status()
+    except Exception:
+        return False
+    if STATUS_FILTER == 'Queue':
+        return tstatus in (MirrorStatus.STATUS_QUEUEDL, MirrorStatus.STATUS_QUEUEUP)
+    if STATUS_FILTER == 'Other':
+        return tstatus in (MirrorStatus.STATUS_ARCHIVING, MirrorStatus.STATUS_EXTRACTING,
+                           MirrorStatus.STATUS_SPLITTING, MirrorStatus.STATUS_CHECKING,
+                           MirrorStatus.STATUS_PAUSED, MirrorStatus.STATUS_CLONING,
+                           MirrorStatus.STATUS_PROCESSING)
+    return tstatus == STATUS_FILTER
+
+
 def get_readable_message():
     msg = ""
     button = None
     STATUS_LIMIT = config_dict['STATUS_LIMIT']
-    tasks = len(download_dict)
+    downloads = [download for download in download_dict.values() if _status_matches(download)]
+    tasks = len(downloads)
     globals()['PAGES'] = (tasks + STATUS_LIMIT - 1) // STATUS_LIMIT
     if PAGE_NO > PAGES and PAGES != 0:
         globals()['STATUS_START'] = STATUS_LIMIT * (PAGES - 1)
         globals()['PAGE_NO'] = PAGES
-    for download in list(download_dict.values())[STATUS_START:STATUS_LIMIT+STATUS_START]:
+    for index, download in enumerate(downloads[STATUS_START:STATUS_LIMIT+STATUS_START], start=STATUS_START + 1):
         msg_link = download.message.link if download.message.chat.type in [
             ChatType.SUPERGROUP, ChatType.CHANNEL] and not config_dict['DELETE_LINKS'] else ''
         elapsed = time() - download.message.date.timestamp()
+        tstatus = download.status()
+        msg += f"<b>{index}. {tstatus}: </b>"
         msg += BotTheme('STATUS_NAME', Name="Task is being Processed!" if config_dict['SAFE_MODE'] and elapsed >= config_dict['STATUS_UPDATE_INTERVAL'] else escape(f'{download.name()}'))
-        if download.status() not in [MirrorStatus.STATUS_SPLITTING, MirrorStatus.STATUS_SEEDING]:
+        if tstatus not in [MirrorStatus.STATUS_SPLITTING, MirrorStatus.STATUS_SEEDING]:
             msg += BotTheme('BAR', Bar=f"{get_progress_bar_string(download.progress())} {download.progress()}")
             msg += BotTheme('PROCESSED', Processed=f"{download.processed_bytes()} of {download.size()}")
-            msg += BotTheme('STATUS', Status=download.status(), Url=msg_link)
+            msg += BotTheme('STATUS', Status=tstatus, Url=msg_link)
             msg += BotTheme('ETA', Eta=download.eta())
             msg += BotTheme('SPEED', Speed=download.speed())
             msg += BotTheme('ELAPSED', Elapsed=get_readable_time(elapsed))
@@ -235,8 +278,8 @@ def get_readable_message():
                     msg += BotTheme('LEECHERS', Leechers=download.leechers_num())
                 except Exception:
                     pass
-        elif download.status() == MirrorStatus.STATUS_SEEDING:
-            msg += BotTheme('STATUS', Status=download.status(), Url=msg_link)
+        elif tstatus == MirrorStatus.STATUS_SEEDING:
+            msg += BotTheme('STATUS', Status=tstatus, Url=msg_link)
             msg += BotTheme('SEED_SIZE', Size=download.size())
             msg += BotTheme('SEED_SPEED', Speed=download.upload_speed())
             msg += BotTheme('UPLOADED', Upload=download.uploaded_bytes())
@@ -244,7 +287,7 @@ def get_readable_message():
             msg += BotTheme('TIME', Time=download.seeding_time())
             msg += BotTheme('SEED_ENGINE', Engine=download.eng())
         else:
-            msg += BotTheme('STATUS', Status=download.status(), Url=msg_link)
+            msg += BotTheme('STATUS', Status=tstatus, Url=msg_link)
             msg += BotTheme('STATUS_SIZE', Size=download.size())
             msg += BotTheme('NON_ENGINE', Engine=download.eng())
 
@@ -255,7 +298,7 @@ def get_readable_message():
             msg += BotTheme('BTSEL', Btsel=f"/{BotCommands.BtSelectCommand}_{download.gid()}")
         msg += BotTheme('CANCEL', Cancel=f"/{BotCommands.CancelMirror}_{download.gid()}")
 
-    if len(msg) == 0:
+    if not download_dict:
         return None, None
 
     dl_speed = 0
@@ -288,16 +331,23 @@ def get_readable_message():
 
     msg += BotTheme('FOOTER')
     buttons = ButtonMaker()
-    buttons.ibutton(BotTheme('REFRESH', Page=f"{PAGE_NO}/{PAGES}"), "status ref")
+    if tasks == 0:
+        msg += f"<b>No Active {STATUS_FILTER} Tasks!</b>\n"
+    buttons.ibutton(BotTheme('REFRESH', Page=f"{PAGE_NO}/{PAGES}"), "status ref", 'header')
+    if config_dict['BOT_MAX_TASKS']:
+        msg += BotTheme('BOT_TASKS', Tasks=tasks, Ttask=config_dict['BOT_MAX_TASKS'],
+                        Free=max(0, config_dict['BOT_MAX_TASKS']-tasks))
+    else:
+        msg += BotTheme('TASKS', Tasks=tasks)
     if tasks > STATUS_LIMIT:
-        if config_dict['BOT_MAX_TASKS']:
-            msg += BotTheme('BOT_TASKS', Tasks=tasks, Ttask=config_dict['BOT_MAX_TASKS'], Free=config_dict['BOT_MAX_TASKS']-tasks)
-        else:
-            msg += BotTheme('TASKS', Tasks=tasks)
-        buttons = ButtonMaker()
-        buttons.ibutton(BotTheme('PREVIOUS'), "status pre")
-        buttons.ibutton(BotTheme('REFRESH', Page=f"{PAGE_NO}/{PAGES}"), "status ref")
-        buttons.ibutton(BotTheme('NEXT'), "status nex")
+        buttons.ibutton(BotTheme('PREVIOUS'), "status pre", 'header')
+        buttons.ibutton(BotTheme('NEXT'), "status nex", 'header')
+        for step in (1, 2, 4, 8):
+            icon = STATUS_STEP_ICONS[step]
+            buttons.ibutton(f"✅{icon}" if step == PAGE_STEP else icon, f"status ps {step}")
+    for label, key in STATUS_FILTERS.items():
+        if key != STATUS_FILTER:
+            buttons.ibutton(f"{STATUS_FILTER_ICONS[label]} {label}", f"status st {key}", 'footer')
     button = buttons.build_menu(3)
     msg += BotTheme('Cpu', cpu=cpu_percent())
     msg += BotTheme('FREE', free=get_readable_file_size(disk_usage(config_dict['DOWNLOAD_DIR']).free), free_p=round(100-disk_usage(config_dict['DOWNLOAD_DIR']).percent, 1))
@@ -310,22 +360,32 @@ def get_readable_message():
 
 async def turn_page(data):
     STATUS_LIMIT = config_dict['STATUS_LIMIT']
-    global STATUS_START, PAGE_NO
+    global STATUS_START, PAGE_NO, STATUS_FILTER, PAGE_STEP
     async with download_dict_lock:
+        if data[1] == 'st':
+            STATUS_FILTER = data[2]
+            STATUS_START = 0
+            PAGE_NO = 1
+            return
+        if data[1] == 'ps':
+            PAGE_STEP = max(1, int(data[2]))
+            return
         if data[1] == "nex":
-            if PAGE_NO == PAGES:
+            if PAGE_NO >= PAGES:
                 STATUS_START = 0
                 PAGE_NO = 1
             else:
-                STATUS_START += STATUS_LIMIT
-                PAGE_NO += 1
+                STATUS_START += STATUS_LIMIT * PAGE_STEP
+                PAGE_NO = min(PAGE_NO + PAGE_STEP, PAGES)
+                if STATUS_START > STATUS_LIMIT * (PAGES - 1):
+                    STATUS_START = STATUS_LIMIT * (PAGES - 1)
         elif data[1] == "pre":
-            if PAGE_NO == 1:
+            if PAGE_NO <= 1:
                 STATUS_START = STATUS_LIMIT * (PAGES - 1)
                 PAGE_NO = PAGES
             else:
-                STATUS_START -= STATUS_LIMIT
-                PAGE_NO -= 1
+                STATUS_START = max(0, STATUS_START - STATUS_LIMIT * PAGE_STEP)
+                PAGE_NO = max(1, PAGE_NO - PAGE_STEP)
 
 
 def get_readable_time(seconds):
