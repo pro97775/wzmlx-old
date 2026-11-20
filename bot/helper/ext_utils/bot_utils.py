@@ -20,8 +20,9 @@ from concurrent.futures import ThreadPoolExecutor
 from aiohttp import ClientSession as aioClientSession
 from psutil import virtual_memory, cpu_percent, disk_usage
 from requests import get as rget
-from pyrogram.enums import ButtonStyle, ChatType
-from pyrogram.types import BotCommand, InputRichMessage
+from mega import MegaApi
+from pyrogram.enums import ChatType
+from pyrogram.types import BotCommand
 from pyrogram.errors import PeerIdInvalid
 
 from bot.helper.ext_utils.db_handler import DbManger
@@ -40,8 +41,6 @@ SIZE_UNITS   = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB']
 STATUS_START = 0
 PAGES        = 1
 PAGE_NO      = 1
-STATUS_FILTER = 'All'
-PAGE_STEP    = 1
 
 
 class MirrorStatus:
@@ -56,26 +55,6 @@ class MirrorStatus:
     STATUS_SPLITTING   = "Split"
     STATUS_CHECKING    = "CheckUp"
     STATUS_SEEDING     = "Seed"
-    STATUS_PROCESSING  = "Process"
-
-
-STATUS_FILTERS = {
-    'All': 'All',
-    'DL': MirrorStatus.STATUS_DOWNLOADING,
-    'UP': MirrorStatus.STATUS_UPLOADING,
-    'Seed': MirrorStatus.STATUS_SEEDING,
-    'Queue': 'Queue',
-    'Other': 'Other',
-}
-
-STATUS_FILTER_STYLES = {
-    'All': ButtonStyle.PRIMARY,
-    'DL': ButtonStyle.PRIMARY,
-    'UP': ButtonStyle.SUCCESS,
-    'Seed': ButtonStyle.SUCCESS,
-    'Queue': ButtonStyle.DANGER,
-    'Other': ButtonStyle.DANGER,
-}
 
 
 class setInterval:
@@ -186,21 +165,17 @@ def get_all_versions():
     except FileNotFoundError:
         vr = ''
     try:
-        vpy = get_distribution('wzgram').version
+        vpy = get_distribution('pyrogram').version
     except DistributionNotFound:
         try:
-            vpy = get_distribution('pyrogram').version
+            vpy = get_distribution('pyrofork').version
         except DistributionNotFound:
             vpy = "2.xx.xx"
-    try:
-        vgdl = get_distribution('gallery-dl').version
-    except DistributionNotFound:
-        vgdl = ''
     bot_cache['eng_versions'] = {'p7zip':vp, 'ffmpeg': vf, 'rclone': vr,
                                     'aria': aria2.client.get_version()['version'],
                                     'aiohttp': get_distribution('aiohttp').version,
                                     'gapi': get_distribution('google-api-python-client').version,
-                                    'gdl': vgdl,
+                                    'mega': MegaApi('test').getVersion(),
                                     'qbit': get_client().app.version,
                                     'pyro': vpy,
                                     'ytdlp': get_distribution('yt-dlp').version}
@@ -214,6 +189,7 @@ class EngineStatus:
         self.STATUS_ARIA = f"Aria2 v{version_cache['aria']}"
         self.STATUS_AIOHTTP = f"AioHttp {version_cache['aiohttp']}"
         self.STATUS_GD = f"Google-API v{version_cache['gapi']}"
+        self.STATUS_MEGA = f"MegaSDK v{version_cache['mega']}"
         self.STATUS_QB = f"qBit {version_cache['qbit']}"
         self.STATUS_TG = f"PyroMulti v{version_cache['pyro']}"
         self.STATUS_YT = f"yt-dlp v{version_cache['ytdlp']}"
@@ -222,49 +198,26 @@ class EngineStatus:
         self.STATUS_ZIP = f"p7zip v{version_cache['p7zip']}"
         self.STATUS_QUEUE = "Sleep v0"
         self.STATUS_RCLONE = f"RClone {version_cache['rclone']}"
-        self.STATUS_GDL = f"Gallery-dl v{version_cache['gdl']}"
-        self.STATUS_TLDV = "tldv HLS"
-        self.STATUS_FFMPEG = f"ffmpeg v{version_cache['ffmpeg']}"
-
-
-def _status_matches(download):
-    if STATUS_FILTER == 'All':
-        return True
-    try:
-        tstatus = download.status()
-    except Exception:
-        return False
-    if STATUS_FILTER == 'Queue':
-        return tstatus in (MirrorStatus.STATUS_QUEUEDL, MirrorStatus.STATUS_QUEUEUP)
-    if STATUS_FILTER == 'Other':
-        return tstatus in (MirrorStatus.STATUS_ARCHIVING, MirrorStatus.STATUS_EXTRACTING,
-                           MirrorStatus.STATUS_SPLITTING, MirrorStatus.STATUS_CHECKING,
-                           MirrorStatus.STATUS_PAUSED, MirrorStatus.STATUS_CLONING,
-                           MirrorStatus.STATUS_PROCESSING)
-    return tstatus == STATUS_FILTER
 
 
 def get_readable_message():
     msg = ""
     button = None
     STATUS_LIMIT = config_dict['STATUS_LIMIT']
-    downloads = [download for download in download_dict.values() if _status_matches(download)]
-    tasks = len(downloads)
+    tasks = len(download_dict)
     globals()['PAGES'] = (tasks + STATUS_LIMIT - 1) // STATUS_LIMIT
     if PAGE_NO > PAGES and PAGES != 0:
         globals()['STATUS_START'] = STATUS_LIMIT * (PAGES - 1)
         globals()['PAGE_NO'] = PAGES
-    for index, download in enumerate(downloads[STATUS_START:STATUS_LIMIT+STATUS_START], start=STATUS_START + 1):
+    for download in list(download_dict.values())[STATUS_START:STATUS_LIMIT+STATUS_START]:
         msg_link = download.message.link if download.message.chat.type in [
             ChatType.SUPERGROUP, ChatType.CHANNEL] and not config_dict['DELETE_LINKS'] else ''
         elapsed = time() - download.message.date.timestamp()
-        tstatus = download.status()
-        msg += f"<b>{index}. {tstatus}: </b>"
         msg += BotTheme('STATUS_NAME', Name="Task is being Processed!" if config_dict['SAFE_MODE'] and elapsed >= config_dict['STATUS_UPDATE_INTERVAL'] else escape(f'{download.name()}'))
-        if tstatus not in [MirrorStatus.STATUS_SPLITTING, MirrorStatus.STATUS_SEEDING]:
+        if download.status() not in [MirrorStatus.STATUS_SPLITTING, MirrorStatus.STATUS_SEEDING]:
             msg += BotTheme('BAR', Bar=f"{get_progress_bar_string(download.progress())} {download.progress()}")
             msg += BotTheme('PROCESSED', Processed=f"{download.processed_bytes()} of {download.size()}")
-            msg += BotTheme('STATUS', Status=tstatus, Url=msg_link)
+            msg += BotTheme('STATUS', Status=download.status(), Url=msg_link)
             msg += BotTheme('ETA', Eta=download.eta())
             msg += BotTheme('SPEED', Speed=download.speed())
             msg += BotTheme('ELAPSED', Elapsed=get_readable_time(elapsed))
@@ -276,8 +229,8 @@ def get_readable_message():
                     msg += BotTheme('LEECHERS', Leechers=download.leechers_num())
                 except Exception:
                     pass
-        elif tstatus == MirrorStatus.STATUS_SEEDING:
-            msg += BotTheme('STATUS', Status=tstatus, Url=msg_link)
+        elif download.status() == MirrorStatus.STATUS_SEEDING:
+            msg += BotTheme('STATUS', Status=download.status(), Url=msg_link)
             msg += BotTheme('SEED_SIZE', Size=download.size())
             msg += BotTheme('SEED_SPEED', Speed=download.upload_speed())
             msg += BotTheme('UPLOADED', Upload=download.uploaded_bytes())
@@ -285,19 +238,18 @@ def get_readable_message():
             msg += BotTheme('TIME', Time=download.seeding_time())
             msg += BotTheme('SEED_ENGINE', Engine=download.eng())
         else:
-            msg += BotTheme('STATUS', Status=tstatus, Url=msg_link)
+            msg += BotTheme('STATUS', Status=download.status(), Url=msg_link)
             msg += BotTheme('STATUS_SIZE', Size=download.size())
             msg += BotTheme('NON_ENGINE', Engine=download.eng())
 
         msg += BotTheme('USER',
                         User=download.message.from_user.mention(style="html"))
         msg += BotTheme('ID', Id=download.message.from_user.id)
-        gid = download.gid()
-        msg += f"\n<b>Fn: </b><tg-button type='callback_data' data='cancel canconf {gid}' style='danger'>Cancel</tg-button>"
-        if (download.eng()).startswith(("qBit", "Aria2")):
-            msg += f" | <tg-button type='callback_data' data='sel select {gid}' style='primary'>Select</tg-button>"
+        if (download.eng()).startswith("qBit"):
+            msg += BotTheme('BTSEL', Btsel=f"/{BotCommands.BtSelectCommand}_{download.gid()}")
+        msg += BotTheme('CANCEL', Cancel=f"/{BotCommands.CancelMirror}_{download.gid()}")
 
-    if not download_dict:
+    if len(msg) == 0:
         return None, None
 
     dl_speed = 0
@@ -330,23 +282,16 @@ def get_readable_message():
 
     msg += BotTheme('FOOTER')
     buttons = ButtonMaker()
-    if tasks == 0:
-        msg += f"<b>No Active {STATUS_FILTER} Tasks!</b>\n"
-    buttons.ibutton(BotTheme('REFRESH', Page=f"{PAGE_NO}/{PAGES}"), "status ref", 'header', style=ButtonStyle.PRIMARY)
-    if config_dict['BOT_MAX_TASKS']:
-        msg += BotTheme('BOT_TASKS', Tasks=tasks, Ttask=config_dict['BOT_MAX_TASKS'],
-                        Free=max(0, config_dict['BOT_MAX_TASKS']-tasks))
-    else:
-        msg += BotTheme('TASKS', Tasks=tasks)
+    buttons.ibutton(BotTheme('REFRESH', Page=f"{PAGE_NO}/{PAGES}"), "status ref")
     if tasks > STATUS_LIMIT:
-        buttons.ibutton(BotTheme('PREVIOUS'), "status pre", 'header', style=ButtonStyle.PRIMARY)
-        buttons.ibutton(BotTheme('NEXT'), "status nex", 'header', style=ButtonStyle.PRIMARY)
-        for step in (1, 2, 4, 8):
-            buttons.ibutton(f"{step}×", f"status ps {step}",
-                            style=ButtonStyle.SUCCESS if step == PAGE_STEP else None)
-    for label, key in STATUS_FILTERS.items():
-        if key != STATUS_FILTER:
-            buttons.ibutton(label, f"status st {key}", 'footer', style=STATUS_FILTER_STYLES[label])
+        if config_dict['BOT_MAX_TASKS']:
+            msg += BotTheme('BOT_TASKS', Tasks=tasks, Ttask=config_dict['BOT_MAX_TASKS'], Free=config_dict['BOT_MAX_TASKS']-tasks)
+        else:
+            msg += BotTheme('TASKS', Tasks=tasks)
+        buttons = ButtonMaker()
+        buttons.ibutton(BotTheme('PREVIOUS'), "status pre")
+        buttons.ibutton(BotTheme('REFRESH', Page=f"{PAGE_NO}/{PAGES}"), "status ref")
+        buttons.ibutton(BotTheme('NEXT'), "status nex")
     button = buttons.build_menu(3)
     msg += BotTheme('Cpu', cpu=cpu_percent())
     msg += BotTheme('FREE', free=get_readable_file_size(disk_usage(config_dict['DOWNLOAD_DIR']).free), free_p=round(100-disk_usage(config_dict['DOWNLOAD_DIR']).percent, 1))
@@ -354,37 +299,27 @@ def get_readable_message():
     msg += BotTheme('uptime', uptime=get_readable_time(time() - botStartTime))
     msg += BotTheme('DL', DL=get_readable_file_size(dl_speed))
     msg += BotTheme('UL', UL=get_readable_file_size(up_speed))
-    return InputRichMessage(html=msg), button
+    return msg, button
 
 
 async def turn_page(data):
     STATUS_LIMIT = config_dict['STATUS_LIMIT']
-    global STATUS_START, PAGE_NO, STATUS_FILTER, PAGE_STEP
+    global STATUS_START, PAGE_NO
     async with download_dict_lock:
-        if data[1] == 'st':
-            STATUS_FILTER = data[2]
-            STATUS_START = 0
-            PAGE_NO = 1
-            return
-        if data[1] == 'ps':
-            PAGE_STEP = max(1, int(data[2]))
-            return
         if data[1] == "nex":
-            if PAGE_NO >= PAGES:
+            if PAGE_NO == PAGES:
                 STATUS_START = 0
                 PAGE_NO = 1
             else:
-                STATUS_START += STATUS_LIMIT * PAGE_STEP
-                PAGE_NO = min(PAGE_NO + PAGE_STEP, PAGES)
-                if STATUS_START > STATUS_LIMIT * (PAGES - 1):
-                    STATUS_START = STATUS_LIMIT * (PAGES - 1)
+                STATUS_START += STATUS_LIMIT
+                PAGE_NO += 1
         elif data[1] == "pre":
-            if PAGE_NO <= 1:
+            if PAGE_NO == 1:
                 STATUS_START = STATUS_LIMIT * (PAGES - 1)
                 PAGE_NO = PAGES
             else:
-                STATUS_START = max(0, STATUS_START - STATUS_LIMIT * PAGE_STEP)
-                PAGE_NO = max(1, PAGE_NO - PAGE_STEP)
+                STATUS_START -= STATUS_LIMIT
+                PAGE_NO -= 1
 
 
 def get_readable_time(seconds):
@@ -421,8 +356,16 @@ def is_index_link(url):
      return bool(re_match(r'https?:\/\/.+\/\d+\:\/', url))    
 
 
+def is_mega_link(url):
+    return "mega.nz" in url or "mega.co.nz" in url
+
+
 def is_rclone_path(path):
     return bool(re_match(r'^(mrcc:)?(?!magnet:)(?![- ])[a-zA-Z0-9_\. -]+(?<! ):(?!.*\/\/).*$|^rcl$', path))
+
+
+def get_mega_link_type(url):
+    return "folder" if "folder" in url or "/#F!" in url else "file"
 
 
 def arg_parser(items, arg_base):
@@ -637,6 +580,7 @@ async def get_stats(event, key="home"):
                 YL = ('∞' if (val := config_dict['YTDLP_LIMIT']) == '' else val),
                 PL = ('∞' if (val := config_dict['PLAYLIST_LIMIT']) == '' else val),
                 CL = ('∞' if (val := config_dict['CLONE_LIMIT']) == '' else val),
+                ML = ('∞' if (val := config_dict['MEGA_LIMIT']) == '' else val),
                 LL = ('∞' if (val := config_dict['LEECH_LIMIT']) == '' else val),
                 TV  = ('Disabled' if (val := config_dict['TOKEN_TIMEOUT']) == '' else get_readable_time(val)),
                 UTI = ('Disabled' if (val := config_dict['USER_TIME_INTERVAL']) == 0 else get_readable_time(val)),

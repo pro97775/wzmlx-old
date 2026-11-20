@@ -43,7 +43,6 @@ desp_dict = {'rcc': ['RClone is a command-line program to sync files and directo
             'user_tds': [f'UserTD helps to Upload files via Bot to your Custom Drive Destination via Global SA mail\n\n➲ <b>SA Mail :</b> {"Not Specified" if "USER_TD_SA" not in config_dict else config_dict["USER_TD_SA"]}', 'Send User TD details for Use while Mirror/Clone\n➲ <b>Format:</b>\nname id/link index(optional)\nname2 link2/id2 index(optional)\n\n<b>NOTE:</b>\n<i>1. Drive ID must be valid, then only it will accept\n2. Names can have spaces\n3. All UserTDs are updated on every change\n4. To delete specific UserTD, give Name(s) separated by each line</i>\n\n<b>Timeout:</b> 60 sec'],
             'gofile': ['Gofile is a free file sharing and storage platform. You can store and share your content without any limit.', "Send GoFile's API Key. Get it on https://gofile.io/myProfile, It will not be Accepted if the API Key is Invalid !!\n<b>Timeout:</b> 60 sec"],
             'streamtape': ['Streamtape is free Video Streaming & sharing Hoster', "Send StreamTape's Login and Key\n<b>Format:</b> <code>user_login:pass_key</code>\n<b>Timeout:</b> 60 sec"],
-            'buzzheavier': ['Buzzheavier is a free file hosting service with unlimited storage and no download limits.', "Send your Buzzheavier Account ID (used as a Bearer token).\n<b>Timeout:</b> 60 sec"],
             }
 fname_dict = {'rcc': 'RClone',
              'lprefix': 'Prefix',
@@ -62,7 +61,6 @@ fname_dict = {'rcc': 'RClone',
              'user_tds': 'User Custom TDs',
              'gofile': 'GoFile',
              'streamtape': 'StreamTape',
-             'buzzheavier': 'Buzzheavier',
              }
 
 async def get_user_settings(from_user, key=None, edit_type=None, edit_mode=None):
@@ -81,7 +79,7 @@ async def get_user_settings(from_user, key=None, edit_type=None, edit_mode=None)
         buttons.ibutton("Close", f"userset {user_id} close")
 
         text = BotTheme('USER_SETTING', NAME=name, ID=user_id, USERNAME=f'@{from_user.username}', LANG=Language.get(lc).display_name() if (lc := from_user.language_code) else "N/A", DC=from_user.dc_id)
-
+        
         button = buttons.build_menu(1)
     elif key == 'universal':
         ytopt = 'Not Exists' if (val:=user_dict.get('yt_opt', config_dict.get('YT_DLP_OPTIONS', ''))) == '' else val
@@ -152,7 +150,7 @@ async def get_user_settings(from_user, key=None, edit_type=None, edit_mode=None)
 
         thumbmsg = "Exists" if await aiopath.exists(thumbpath) else "Not Exists"
         buttons.ibutton(f"{'✅️' if thumbmsg == 'Exists' else ''} Thumbnail", f"userset {user_id} thumb")
-
+        
         split_size = get_readable_file_size(config_dict['LEECH_SPLIT_SIZE']) + ' (Default)' if user_dict.get('split_size', '') == '' else get_readable_file_size(user_dict['split_size'])
         equal_splits = 'Enabled' if user_dict.get('equal_splits', config_dict.get('EQUAL_SPLITS')) else 'Disabled'
         media_group = 'Enabled' if user_dict.get('media_group', config_dict.get('MEDIA_GROUP')) else 'Disabled'
@@ -192,7 +190,7 @@ async def get_user_settings(from_user, key=None, edit_type=None, edit_mode=None)
         text = f"㊂ <b><u>{fname_dict[key]} Settings :</u></b>\n\n" \
                f"➲ <b>Enabled DDL Server(s) :</b> <i>{ddl_serv}</i>\n\n" \
                f"➲ <b>Description :</b> <i>{desp_dict[key][0]}</i>"
-        for btn in ['gofile', 'streamtape', 'buzzheavier']:
+        for btn in ['gofile', 'streamtape']:
             buttons.ibutton(f"{'✅️' if btn in serv_list else ''} {fname_dict[btn]}", f"userset {user_id} {btn}")
         buttons.ibutton("Back", f"userset {user_id} back mirror", "footer")
         buttons.ibutton("Close", f"userset {user_id} close", "footer")
@@ -230,12 +228,11 @@ async def get_user_settings(from_user, key=None, edit_type=None, edit_mode=None)
         elif key in ['mprefix', 'mremname', 'msuffix']:
             set_exist = 'Not Exists' if (val:=user_dict.get(key, config_dict.get(f'MIRROR_FILENAME_{key[1:].upper()}', ''))) == '' else val
             text += f"➲ <b>Mirror Filename {fname_dict[key]} :</b> {set_exist}\n\n"
-        elif key in ['gofile', 'streamtape', 'buzzheavier']:
+        elif key in ['gofile', 'streamtape']:
             set_exist = 'Exists' if key in (ddl_dict:=user_dict.get('ddl_servers', {})) and ddl_dict[key][1] and ddl_dict[key][1] != '' else 'Not Exists'
             ddl_mode = 'Enabled' if key in (ddl_dict:=user_dict.get('ddl_servers', {})) and ddl_dict[key][0] else 'Disabled'
-            key_label = 'Account ID' if key == 'buzzheavier' else 'API Key'
             text = f"➲ <b>Upload {fname_dict[key]} :</b> {ddl_mode}\n" \
-                   f"➲ <b>{fname_dict[key]}'s {key_label} :</b> {set_exist}\n\n"
+                   f"➲ <b>{fname_dict[key]}'s API Key :</b> {set_exist}\n\n"
             buttons.ibutton('Disable DDL' if ddl_mode == 'Enabled' else 'Enable DDL', f"userset {user_id} s{key}", "header")
         elif key == 'user_tds':
             set_exist = len(val) if (val:=user_dict.get(key, False)) else 'Not Exists'
@@ -312,7 +309,7 @@ async def set_custom(client, message, pre_event, key, direct=False):
     return_key = 'leech'
     n_key = key
     user_dict = user_data.get(user_id, {})
-    if key in ['gofile', 'streamtape', 'buzzheavier']:
+    if key in ['gofile', 'streamtape']:
         ddl_dict = user_dict.get('ddl_servers', {})
         mode, api = ddl_dict.get(key, [False, ""])
         if key == "gofile" and not await Gofile.is_goapi(value):
@@ -358,7 +355,7 @@ async def set_custom(client, message, pre_event, key, direct=False):
         if key == 'usess':
             password = Fernet.generate_key()
             try:
-                await deleteMessage(await (await sendCustomMsg(message.from_user.id, f"<u><b>Decryption Key:</b></u> \n\n<code>{password.decode()}</code>\n\n<b>Note:</b> <i>Keep this Key Securely, this is not Stored in Bot and Access Key to use your Session...</i>")).pin(both_sides=True))
+                await deleteMessage(await (await sendCustomMsg(message.from_user.id, f"<u><b>Decryption Key:</b></u> \n┃\n┃ <code>{password.decode()}</code>\n┃\n┖ <b>Note:</b> <i>Keep this Key Securely, this is not Stored in Bot and Access Key to use your Session...</i>")).pin(both_sides=True))
                 encrypt_sess = Fernet(password).encrypt(value.encode())
                 value = encrypt_sess.decode()
             except Exception:
@@ -433,7 +430,7 @@ async def event_handler(client, query, pfunc, rfunc, photo=False, document=False
             mtype = event.text
         user = event.from_user or event.sender_chat
         return bool(user.id == user_id and event.chat.id == query.message.chat.id and mtype)
-
+        
     handler = client.add_handler(MessageHandler(
         pfunc, filters=create(event_filter)), group=-1)
     while handler_dict[user_id]:
@@ -602,7 +599,7 @@ async def edit_user_settings(client, query):
         else:
             await query.answer("Old Settings", show_alert=True)
             await update_user_settings(query)
-    elif data[2] in ['ddl_servers', 'user_tds', 'gofile', 'streamtape', 'buzzheavier']:
+    elif data[2] in ['ddl_servers', 'user_tds', 'gofile', 'streamtape']:
         handler_dict[user_id] = False
         await query.answer()
         edit_mode = len(data) == 4
@@ -685,7 +682,7 @@ async def edit_user_settings(client, query):
         await query.answer()
         await deleteMessage(message.reply_to_message)
         await deleteMessage(message)
-
+        
 async def send_users_settings(client, message):
     text = message.text.split(maxsplit=1)
     userid = text[1] if len(text) > 1 else None
