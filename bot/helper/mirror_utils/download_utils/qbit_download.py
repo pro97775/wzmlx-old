@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from time import time
 from aiofiles.os import remove as aioremove, path as aiopath
+from qbittorrentapi.exceptions import Conflict409Error
 
 from bot import download_dict, download_dict_lock, get_client, LOGGER, config_dict, non_queued_dl, queue_dict_lock
 from bot.helper.mirror_utils.status_utils.qbit_status import QbittorrentStatus
@@ -42,7 +43,12 @@ async def add_qb_torrent(link, path, listener, ratio, seed_time):
         added_to_queue, event = await is_queued(listener.uid)
         op = await sync_to_async(client.torrents_add, url, tpath, path, is_paused=added_to_queue, tags=f'{listener.uid}',
                                  ratio_limit=ratio, seeding_time_limit=seed_time, headers={'user-agent': 'Wget/1.12'})
-        if op.lower() == "ok.":
+        # qbittorrent-api >= 2024 returns TorrentsAddedMetadata, older versions return "Ok."
+        if isinstance(op, str):
+            added = op.lower() == "ok."
+        else:
+            added = getattr(op, 'success_count', 0) > 0
+        if added:
             tor_info = await sync_to_async(client.torrents_info, tag=f'{listener.uid}')
             if len(tor_info) == 0:
                 while True:
@@ -116,6 +122,8 @@ async def add_qb_torrent(link, path, listener, ratio, seed_time):
 
             async with queue_dict_lock:
                 non_queued_dl.add(listener.uid)
+    except Conflict409Error:
+        await sendMessage(listener.message, "This Torrent already added or unsupported/invalid link/file.")
     except Exception as e:
         await sendMessage(listener.message, str(e))
     finally:
