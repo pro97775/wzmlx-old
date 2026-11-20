@@ -21,17 +21,21 @@ class ButtonMaker:
         elif position == 'footer':
             self.__footer_button.append(InlineKeyboardButton(text=key, url=link))
 
-    def ibutton(self, key, data, position=None):
+    def ibutton(self, key, data, position=None, style=None):
+        kwargs = {'text': key, 'callback_data': data}
+        if style is not None:
+            kwargs['style'] = style
+        button = InlineKeyboardButton(**kwargs)
         if not position:
-            self.__button.append(InlineKeyboardButton(text=key, callback_data=data))
+            self.__button.append(button)
         elif position == 'header':
-            self.__header_button.append(InlineKeyboardButton(text=key, callback_data=data))
+            self.__header_button.append(button)
         elif position == 'f_body':
-            self.__first_body_button.append(InlineKeyboardButton(text=key, callback_data=data))
+            self.__first_body_button.append(button)
         elif position == 'l_body':
-            self.__last_body_button.append(InlineKeyboardButton(text=key, callback_data=data))
+            self.__last_body_button.append(button)
         elif position == 'footer':
-            self.__footer_button.append(InlineKeyboardButton(text=key, callback_data=data))
+            self.__footer_button.append(button)
 
     def build_menu(self, b_cols=1, h_cols=8, fb_cols=2, lb_cols=2, f_cols=8):
         menu = [self.__button[i:i+b_cols]

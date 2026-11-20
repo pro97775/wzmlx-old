@@ -20,7 +20,7 @@ from concurrent.futures import ThreadPoolExecutor
 from aiohttp import ClientSession as aioClientSession
 from psutil import virtual_memory, cpu_percent, disk_usage
 from requests import get as rget
-from pyrogram.enums import ChatType
+from pyrogram.enums import ButtonStyle, ChatType
 from pyrogram.types import BotCommand
 from pyrogram.errors import PeerIdInvalid
 
@@ -68,16 +68,14 @@ STATUS_FILTERS = {
     'Other': 'Other',
 }
 
-STATUS_FILTER_ICONS = {
-    'All': '🔘',
-    'DL': '🔵',
-    'UP': '🟢',
-    'Seed': '🟣',
-    'Queue': '🟡',
-    'Other': '🟠',
+STATUS_FILTER_STYLES = {
+    'All': ButtonStyle.PRIMARY,
+    'DL': ButtonStyle.PRIMARY,
+    'UP': ButtonStyle.SUCCESS,
+    'Seed': ButtonStyle.SUCCESS,
+    'Queue': ButtonStyle.DANGER,
+    'Other': ButtonStyle.DANGER,
 }
-
-STATUS_STEP_ICONS = {1: '1️⃣', 2: '2️⃣', 4: '4️⃣', 8: '8️⃣'}
 
 
 class setInterval:
@@ -333,21 +331,21 @@ def get_readable_message():
     buttons = ButtonMaker()
     if tasks == 0:
         msg += f"<b>No Active {STATUS_FILTER} Tasks!</b>\n"
-    buttons.ibutton(BotTheme('REFRESH', Page=f"{PAGE_NO}/{PAGES}"), "status ref", 'header')
+    buttons.ibutton(BotTheme('REFRESH', Page=f"{PAGE_NO}/{PAGES}"), "status ref", 'header', style=ButtonStyle.PRIMARY)
     if config_dict['BOT_MAX_TASKS']:
         msg += BotTheme('BOT_TASKS', Tasks=tasks, Ttask=config_dict['BOT_MAX_TASKS'],
                         Free=max(0, config_dict['BOT_MAX_TASKS']-tasks))
     else:
         msg += BotTheme('TASKS', Tasks=tasks)
     if tasks > STATUS_LIMIT:
-        buttons.ibutton(BotTheme('PREVIOUS'), "status pre", 'header')
-        buttons.ibutton(BotTheme('NEXT'), "status nex", 'header')
+        buttons.ibutton(BotTheme('PREVIOUS'), "status pre", 'header', style=ButtonStyle.PRIMARY)
+        buttons.ibutton(BotTheme('NEXT'), "status nex", 'header', style=ButtonStyle.PRIMARY)
         for step in (1, 2, 4, 8):
-            icon = STATUS_STEP_ICONS[step]
-            buttons.ibutton(f"✅{icon}" if step == PAGE_STEP else icon, f"status ps {step}")
+            buttons.ibutton(f"{step}×", f"status ps {step}",
+                            style=ButtonStyle.SUCCESS if step == PAGE_STEP else None)
     for label, key in STATUS_FILTERS.items():
         if key != STATUS_FILTER:
-            buttons.ibutton(f"{STATUS_FILTER_ICONS[label]} {label}", f"status st {key}", 'footer')
+            buttons.ibutton(label, f"status st {key}", 'footer', style=STATUS_FILTER_STYLES[label])
     button = buttons.build_menu(3)
     msg += BotTheme('Cpu', cpu=cpu_percent())
     msg += BotTheme('FREE', free=get_readable_file_size(disk_usage(config_dict['DOWNLOAD_DIR']).free), free_p=round(100-disk_usage(config_dict['DOWNLOAD_DIR']).percent, 1))
