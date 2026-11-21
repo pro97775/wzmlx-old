@@ -19,6 +19,7 @@ from http.cookiejar import MozillaCookieJar
 
 from bot import LOGGER, config_dict
 from bot.helper.ext_utils.bot_utils import get_readable_time, is_share_link, is_index_link, is_magnet
+from bot.helper.mirror_utils.download_utils.url_shortener_bypass import is_url_shortener, bypass_shortener
 from bot.helper.ext_utils.exceptions import DirectDownloadLinkException
 from bot.helper.ext_utils.help_messages import PASSWORD_ERROR_MESSAGE
 
@@ -117,6 +118,8 @@ def direct_link_generator(link):
     domain = urlparse(link).hostname
     if not domain:
         raise DirectDownloadLinkException("ERROR: Invalid URL")
+    if is_url_shortener(domain):
+        return bypass_shortener(link)
     if 'youtube.com' in domain or 'youtu.be' in domain:
         raise DirectDownloadLinkException("ERROR: Use ytdl cmds for Youtube links")
     elif config_dict['DEBRID_LINK_API'] and any(x in domain for x in debrid_link_sites):

@@ -47,7 +47,7 @@ async def status_pages(_, query):
         await editMessage(query.message, f"{(await user_info(user_id)).mention(style='html')}, <i>Refreshing Status...</i>")
         await sleep(1.5)
         await update_all_messages(True)
-    elif data[1] in ['nex', 'pre']:
+    elif data[1] in ['nex', 'pre', 'st', 'ps']:
         await turn_page(data)
         await update_all_messages(True)
     elif data[1] == 'close':

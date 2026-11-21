@@ -10,6 +10,8 @@ class _BotCommands:
         self.LeechCommand = [f'leech{CMD_SUFFIX}', f'l{CMD_SUFFIX}']
         self.QbLeechCommand = [f'qbleech{CMD_SUFFIX}', f'ql{CMD_SUFFIX}']
         self.YtdlLeechCommand = [f'ytdlleech{CMD_SUFFIX}', f'yl{CMD_SUFFIX}']
+        self.GalleryDlCommand = [f'gallerydl{CMD_SUFFIX}', f'gdl{CMD_SUFFIX}']
+        self.GalleryDlLeechCommand = [f'gallerydlleech{CMD_SUFFIX}', f'gdlleech{CMD_SUFFIX}']
         if config_dict['SHOW_EXTRA_CMDS']:
             self.MirrorCommand.extend([f'unzipmirror{CMD_SUFFIX}', f'uzm{CMD_SUFFIX}', f'zipmirror{CMD_SUFFIX}', f'zm{CMD_SUFFIX}'])
             self.QbMirrorCommand.extend([f'qbunzipmirror{CMD_SUFFIX}', f'quzm{CMD_SUFFIX}', f'qbzipmirror{CMD_SUFFIX}', f'qzm{CMD_SUFFIX}'])
@@ -22,6 +24,7 @@ class _BotCommands:
         self.DeleteCommand = f'del{CMD_SUFFIX}'
         self.CancelMirror = f'cancel{CMD_SUFFIX}'
         self.CancelAllCommand = [f'cancelall{CMD_SUFFIX}', 'cancellallbot']
+        self.ForceStartCommand = [f'forcestart{CMD_SUFFIX}', f'fs{CMD_SUFFIX}']
         self.ListCommand = f'list{CMD_SUFFIX}'
         self.SearchCommand = f'search{CMD_SUFFIX}'
         self.StatusCommand = [f'status{CMD_SUFFIX}', f's{CMD_SUFFIX}', 'statusall']

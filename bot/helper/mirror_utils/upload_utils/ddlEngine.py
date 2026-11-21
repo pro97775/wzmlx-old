@@ -13,6 +13,7 @@ from aiohttp.client_exceptions import ContentTypeError
 from bot import LOGGER, user_data
 from bot.helper.mirror_utils.upload_utils.ddlserver.gofile import Gofile
 from bot.helper.mirror_utils.upload_utils.ddlserver.streamtape import Streamtape
+from bot.helper.mirror_utils.upload_utils.ddlserver.buzzheavier import Buzzheavier
 from bot.helper.ext_utils.fs_utils import get_mime_type
 
 
@@ -54,6 +55,9 @@ class DDLUploader:
         chunk_size = current - self.last_uploaded
         self.last_uploaded = current
         self.__processed_bytes += chunk_size
+
+    def add_uploaded_bytes(self, size):
+        self.__processed_bytes += size
     
     @retry(wait=wait_exponential(multiplier=2, min=4, max=8), stop=stop_after_attempt(3),
         retry=retry_if_exception_type(Exception))
@@ -88,6 +92,14 @@ class DDLUploader:
                         raise Exception("StreamTape Login & Key not Found, Kindly Recheck !")
                     nlink = await Streamtape(self, login, key).upload(file_path)
                     all_links['StreamTape'] = nlink
+                if serv == 'buzzheavier':
+                    self.__engine = 'Buzzheavier API'
+                    provider = Buzzheavier(self, api_key)
+                    nlink = await provider.upload(file_path)
+                    self.total_files = provider.total_files
+                    self.total_folders = provider.total_folders
+                    if nlink:
+                        all_links['Buzzheavier'] = nlink
                 self.__processed_bytes = 0
         if not all_links:
             raise Exception("No DDL Enabled to Upload.")

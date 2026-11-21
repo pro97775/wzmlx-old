@@ -17,6 +17,9 @@ from bot.helper.ext_utils.task_manager import task_utils
 from bot.helper.mirror_utils.download_utils.aria2_download import add_aria2c_download
 from bot.helper.mirror_utils.download_utils.gd_download import add_gd_download
 from bot.helper.mirror_utils.download_utils.qbit_download import add_qb_torrent
+from bot.helper.mirror_utils.download_utils.gallery_dl_download import add_gallery_dl_download, is_gallery_dl_link
+from bot.helper.mirror_utils.download_utils.debrid_magnets import alldebrid_resolve_magnet, torbox_resolve_magnet
+from bot.helper.mirror_utils.download_utils.tldv_download import add_tldv_download, is_tldv_link
 from bot.helper.mirror_utils.download_utils.rclone_download import add_rclone_download
 from bot.helper.mirror_utils.rclone_utils.list import RcloneList
 from bot.helper.mirror_utils.upload_utils.gdriveTools import GoogleDriveHelper
@@ -32,7 +35,7 @@ from bot.helper.ext_utils.bulk_links import extract_bulk_links
 from bot.modules.gen_pyro_sess import get_decrypt_key
 
 @new_task
-async def _mirror_leech(client, message, isQbit=False, isLeech=False, sameDir=None, bulk=[]):
+async def _mirror_leech(client, message, isQbit=False, isLeech=False, sameDir=None, bulk=[], isGalleryDl=False):
     text = message.text.split('\n')
     input_list = text[0].split(' ')
 
@@ -58,6 +61,7 @@ async def _mirror_leech(client, message, isQbit=False, isLeech=False, sameDir=No
                 '-h': '', '-headers': '',
                 '-ss': '0', '-screenshots': '',
                 '-t': '', '-thumb': '',
+                '-ff': '',
     }
 
     args = arg_parser(input_list[1:], arg_base)
@@ -85,6 +89,15 @@ async def _mirror_leech(client, message, isQbit=False, isLeech=False, sameDir=No
     pssw          = args['-p'] or args['-pass']
     thumb         = args['-t'] or args['-thumb']
     sshots        = int(ss) if (ss := (args['-ss'] or args['-screenshots'])).isdigit() else 0
+    ffmpeg_cmds   = []
+    if ff_names := (args['-ff'] or ''):
+        available = config_dict['FFMPEG_CMDS'] or {}
+        for ff_name in ff_names.split('|'):
+            cmds = available.get(ff_name)
+            if isinstance(cmds, str):
+                cmds = [cmds]
+            if cmds:
+                ffmpeg_cmds.extend(cmds)
     bulk_start    = 0
     bulk_end      = 0
     ratio         = None
@@ -132,7 +145,7 @@ async def _mirror_leech(client, message, isQbit=False, isLeech=False, sameDir=No
         nextmsg = await sendMessage(message, " ".join(b_msg))
         nextmsg = await client.get_messages(chat_id=message.chat.id, message_ids=nextmsg.id)
         nextmsg.from_user = message.from_user
-        _mirror_leech(client, nextmsg, isQbit, isLeech, sameDir, bulk)
+        _mirror_leech(client, nextmsg, isQbit, isLeech, sameDir, bulk, isGalleryDl)
         return
 
     if len(bulk) != 0:
@@ -158,7 +171,7 @@ async def _mirror_leech(client, message, isQbit=False, isLeech=False, sameDir=No
             sameDir['tasks'].add(nextmsg.id)
         nextmsg.from_user = message.from_user
         await sleep(5)
-        _mirror_leech(client, nextmsg, isQbit, isLeech, sameDir, bulk)
+        _mirror_leech(client, nextmsg, isQbit, isLeech, sameDir, bulk, isGalleryDl)
 
     __run_multi()
 
@@ -213,6 +226,11 @@ async def _mirror_leech(client, message, isQbit=False, isLeech=False, sameDir=No
         await delete_links(message)
         return
 
+    if isGalleryDl and not is_gallery_dl_link(link):
+        await sendMessage(message, 'This link is not supported by gallery-dl.')
+        await delete_links(message)
+        return
+
     error_msg = []
     error_button = None
     task_utilis_msg, error_button = await task_utils(message)
@@ -234,7 +252,7 @@ async def _mirror_leech(client, message, isQbit=False, isLeech=False, sameDir=No
         LOGGER.info(link)
         org_link = link
 
-    if (not is_magnet(link) or (config_dict['REAL_DEBRID_API'] and is_magnet(link))) \
+    if not isGalleryDl and not is_tldv_link(link) and (not is_magnet(link) or (config_dict['REAL_DEBRID_API'] and is_magnet(link))) \
         and (not isQbit or (config_dict['REAL_DEBRID_API'] and is_magnet(link))) \
         and not is_rclone_path(link) and not is_gdrive_link(link) and not link.endswith('.torrent') and file_ is None:
         content_type = await get_content_type(link)
@@ -333,7 +351,25 @@ async def _mirror_leech(client, message, isQbit=False, isLeech=False, sameDir=No
 
     listener = MirrorLeechListener(message, compress, extract, isQbit, isLeech, tag, select, seed,
                                     sameDir, rcf, up, join, drive_id=drive_id, index_link=index_link, 
-                                    source_url=org_link or link, leech_utils={'screenshots': sshots, 'thumb': thumb})
+                                    source_url=org_link or link, leech_utils={'screenshots': sshots, 'thumb': thumb},
+                                    ffmpeg_cmds=ffmpeg_cmds)
+
+    if isinstance(link, str) and is_magnet(link) and not isQbit and not isGalleryDl and (config_dict['ALLDEBRID_API'] or config_dict['TORBOX_API']):
+        provider = 'AllDebrid' if config_dict['ALLDEBRID_API'] else 'TorBox'
+        process_msg = await sendMessage(message, f'<i><b>Resolving magnet via {provider}...</b></i>')
+        try:
+            if config_dict['ALLDEBRID_API']:
+                debrid_links = await alldebrid_resolve_magnet(link, config_dict['ALLDEBRID_API'])
+            else:
+                debrid_links = await torbox_resolve_magnet(link, config_dict['TORBOX_API'])
+        except DirectDownloadLinkException as e:
+            await editMessage(process_msg, str(e))
+            await delete_links(message)
+            return
+        await deleteMessage(process_msg)
+        await add_direct_download(debrid_links, path, listener, name)
+        await delete_links(message)
+        return
 
     if file_ is not None:
         await delete_links(message)
@@ -354,6 +390,12 @@ async def _mirror_leech(client, message, isQbit=False, isLeech=False, sameDir=No
     elif is_gdrive_link(link):
         await delete_links(message)
         await add_gd_download(link, path, listener, name, org_link)
+    elif isGalleryDl:
+        await delete_links(message)
+        await add_gallery_dl_download(link, path, listener, name)
+    elif is_tldv_link(link):
+        await delete_links(message)
+        await add_tldv_download(link, path, listener)
     elif isQbit and 'real-debrid' not in link:
         await add_qb_torrent(link, path, listener, ratio, seed_time)
     elif not is_telegram_link(link):

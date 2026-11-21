@@ -32,6 +32,7 @@ from bot.helper.mirror_utils.status_utils.rclone_status import RcloneStatus
 from bot.helper.mirror_utils.status_utils.queue_status import QueueStatus
 from bot.helper.mirror_utils.upload_utils.gdriveTools import GoogleDriveHelper
 from bot.helper.mirror_utils.upload_utils.pyrogramEngine import TgUploader
+from bot.helper.ext_utils.ffmpeg_utils import run_ffmpeg_commands
 from bot.helper.mirror_utils.upload_utils.ddlEngine import DDLUploader
 from bot.helper.mirror_utils.rclone_utils.transfer import RcloneTransferHelper
 from bot.helper.telegram_helper.message_utils import sendCustomMsg, sendMessage, editMessage, deleteMessage, delete_all_messages, delete_links, sendMultiMessage, update_all_messages
@@ -42,7 +43,7 @@ from bot.helper.themes import BotTheme
 
 class MirrorLeechListener:
     def __init__(self, message, compress=False, extract=False, isQbit=False, isLeech=False, tag=None, select=False, seed=False, sameDir=None, rcFlags=None, upPath=None, isClone=False, 
-                join=False, drive_id=None, index_link=None, isYtdlp=False, source_url=None, logMessage=None, leech_utils={}):
+                join=False, drive_id=None, index_link=None, isYtdlp=False, source_url=None, logMessage=None, leech_utils={}, ffmpeg_cmds=None):
         if sameDir is None:
             sameDir = {}
         self.message = message
@@ -78,6 +79,7 @@ class MirrorLeechListener:
         self.botpmmsg = None
         self.upload_details = {}
         self.leech_utils = leech_utils
+        self.ffmpeg_cmds = ffmpeg_cmds or []
         self.source_url = (
             source_url
             if source_url and source_url.startswith('http')
@@ -314,6 +316,10 @@ class MirrorLeechListener:
 
         if not self.compress and not self.extract:
             up_path = dl_path
+
+        if self.ffmpeg_cmds:
+            LOGGER.info(f'Running ffmpeg commands: {up_path}')
+            await run_ffmpeg_commands(up_path, self.ffmpeg_cmds, self, gid)
 
         up_dir, up_name = up_path.rsplit('/', 1)
         size = await get_path_size(up_dir)

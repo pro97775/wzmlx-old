@@ -7,6 +7,7 @@ from pyrogram import Client as tgClient, enums
 from pymongo import MongoClient
 from asyncio import Lock, new_event_loop, set_event_loop
 from dotenv import load_dotenv, dotenv_values
+from json import loads as json_loads
 from threading import Thread
 from time import sleep, time
 from subprocess import Popen, run as srun, check_output
@@ -239,6 +240,25 @@ DEBRID_LINK_API = environ.get('DEBRID_LINK_API', '')
 if len(DEBRID_LINK_API) == 0:
     DEBRID_LINK_API = ''
 
+ALLDEBRID_API = environ.get('ALLDEBRID_API', '')
+if len(ALLDEBRID_API) == 0:
+    ALLDEBRID_API = ''
+
+TORBOX_API = environ.get('TORBOX_API', '')
+if len(TORBOX_API) == 0:
+    TORBOX_API = ''
+
+TLDV_TOKEN = environ.get('TLDV_TOKEN', '')
+if len(TLDV_TOKEN) == 0:
+    TLDV_TOKEN = ''
+
+FFMPEG_CMDS = environ.get('FFMPEG_CMDS', '')
+try:
+    FFMPEG_CMDS = json_loads(FFMPEG_CMDS) if FFMPEG_CMDS else {}
+except ValueError:
+    log_warning('FFMPEG_CMDS is not valid JSON, ignoring it')
+    FFMPEG_CMDS = {}
+
 INDEX_URL = environ.get('INDEX_URL', '').rstrip("/")
 if len(INDEX_URL) == 0:
     INDEX_URL = ''
@@ -247,7 +267,7 @@ SEARCH_API_LINK = environ.get('SEARCH_API_LINK', '').rstrip("/")
 if len(SEARCH_API_LINK) == 0:
     SEARCH_API_LINK = ''
 
-CAP_FONT = environ.get('CAP_FONT', '').lower()
+CAP_FONT = environ.get('CAP_FONT', 'code').lower()
 if CAP_FONT.strip() not in ['', 'b', 'i', 'u', 's', 'spoiler', 'code']:
     CAP_FONT = 'code'
 
@@ -594,6 +614,10 @@ config_dict = {'ANIME_TEMPLATE': ANIME_TEMPLATE,
                'DATABASE_URL': DATABASE_URL,
                'REAL_DEBRID_API': REAL_DEBRID_API,
                'DEBRID_LINK_API': DEBRID_LINK_API,
+               'ALLDEBRID_API': ALLDEBRID_API,
+               'TORBOX_API': TORBOX_API,
+               'TLDV_TOKEN': TLDV_TOKEN,
+               'FFMPEG_CMDS': FFMPEG_CMDS,
                'FILELION_API': FILELION_API,
                'DELETE_LINKS': DELETE_LINKS,
                'DEFAULT_UPLOAD': DEFAULT_UPLOAD,
